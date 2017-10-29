@@ -26,7 +26,7 @@ python construct_vocab.py --data train_data -t 100 --save vocab.t100
 For 128 sentence pairs in a minibatch, 512-unit LSTM with vocabulary size of 22231 can process 10 iterations per second on 7.5GB GPU memory.
 On dataset with 4,300,000 pairs, training is performed over 5 epoch in 4.5 hours.
 
-### Skip-thought Vector
+#### Skip-thought Vector
 
 For 128 sentence pairs in a minibatch, 512-unit GRU with vocabulary size of 22231 can process 2-2.5 iterations per second on 7.5GB GPU memory.
 On dataset with 4,000,000 pairs, training is performed over 5 epoch in 18-22 hours.
@@ -57,8 +57,6 @@ python construct_vocab.py --data datasets/wikitext-103-raw/spacy_wikitext-103-ra
 ```
 python -u train.py -g 3 --train datasets/wikitext-103-raw/spacy_wikitext-103-raw.train.after --valid datasets/wikitext-103-raw/spacy_wikitext-103-raw.valid.after --vocab datasets/wikitext-103-raw/spacy_wikitext-103-raw.train.after.vocab.t100 -u 512 --layer 1 --dropout 0.1 --batchsize 128 --out outs/st.u512.l1.d01.b128
 ```
-
-`--language-model`
 
 
 ---
