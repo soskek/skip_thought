@@ -2,13 +2,21 @@
 
 ## Prepare
 
+`sh prepare_rawwikitext.sh`
+
 `PYTHONIOENCODING=utf-8 python preprocess_spacy.py datasets/wikitext-103-raw/wiki.train.raw > train`
 
-`PYTHONIOENCODING=utf-8 python preprocess_after_spacy.py train > after.train`
+```
+PYTHONIOENCODING=utf-8 python preprocess_after_spacy.py datasets/wikitext-103-raw/spacy_wikitext-103-raw.train > datasets/wikitext-103-raw/spacy_wikitext-103-raw.train.after
+PYTHONIOENCODING=utf-8 python preprocess_after_spacy.py datasets/wikitext-103-raw/spacy_wikitext-103-raw.valid > datasets/wikitext-103-raw/spacy_wikitext-103-raw.valid.after
+PYTHONIOENCODING=utf-8 python preprocess_after_spacy.py datasets/wikitext-103-raw/spacy_wikitext-103-raw.test > datasets/wikitext-103-raw/spacy_wikitext-103-raw.test.after
+```
 
-`python construct_vocab.py --data after.train -t 30 -s after.vocab.t30.json`
+`python construct_vocab.py --data datasets/wikitext-103-raw/spacy_wikitext-103-raw.train.after -t 100 --save datasets/wikitext-103-raw/spacy_wikitext-103-raw.train.after.vocab.t100`
 
 `python -u train.py -g 3 --train datasets/wikitext-103-raw/after.train --valid datasets/wikitext-103-raw/after.valid --vocab datasets/wikitext-103-raw/after.vocab.t100.json -u 512 --layer 1 --dropout 0.1`
+
+`python -u train.py -g 3 --train datasets/wikitext-103-raw/spacy_wikitext-103-raw.train.after --valid datasets/wikitext-103-raw/spacy_wikitext-103-raw.valid.after --vocab datasets/wikitext-103-raw/spacy_wikitext-103-raw.train.after.vocab.t100 -u 512 --layer 1 --dropout 0.1 --batchsize 128 --out outs/st.u512.l1.d01.b128`
 
 
 For 128 sentence pairs in a minibatch, 512-unit GRU with vocabulary size of 22231 can process 2.4 iterations per second on 7.5GB GPU memory.
