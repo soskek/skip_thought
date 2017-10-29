@@ -136,13 +136,11 @@ class SkipThoughtModel(chainer.Chain):
         self.n_units = n_units
         self.n_layers = n_layers
 
-        #"""
         for name, param in self.namedparams():
             if param.ndim != 1:
                 # This initialization is applied only for weight matrices
                 param.data[...] = np.random.uniform(
                     -0.1, 0.1, param.data.shape)
-        #"""
 
         self.loss = 0.
 
