@@ -7,13 +7,13 @@ https://github.com/tomsercu/lstm
 """
 from __future__ import division
 from __future__ import print_function
-import argparse
 import collections
 import io
 import json
 import os
 
 import numpy as np
+import progressbar
 
 import chainer
 from chainer import cuda
@@ -41,6 +41,17 @@ def convert_xt_batch_seq(xt_batch_seq, gpu):
     return x_seq_batch, t_seq_batch
 
 
+def count_words_from_file(counts, file_path):
+    bar = progressbar.ProgressBar()
+    for l in bar(io.open(file_path, encoding='utf-8')):
+        # TODO: parallel
+        if l.strip():
+            words = l.strip().split()
+            for word in words:
+                counts[word] += 1
+    return counts
+
+
 def count_words(dataset, alpha=0.4):
     counts = collections.defaultdict(int)
     for w in dataset:
@@ -51,6 +62,37 @@ def count_words(dataset, alpha=0.4):
     counts = counts ** alpha
     counts = counts.tolist()
     return counts
+
+
+def make_chain_dataset(file_path, vocab={}, update_vocab=False,
+                       chain_length=2):
+    dataset = []
+    chain = []
+    unk_id = vocab['<unk>']
+
+    def make_array(chain):
+        array_chain = []
+        for words in chain:
+            tokens = []
+            for word in words:
+                if update_vocab:
+                    if word not in vocab:
+                        vocab[word] = len(vocab)
+                tokens.append(vocab.get(word, unk_id))
+            array_chain.append(np.array(tokens, 'i'))
+        return array_chain
+
+    for line in io.open(file_path, encoding='utf-8'):
+        if not line.strip():
+            if len(chain) >= chain_length:
+                dataset.append(make_array(chain))
+                chain = []
+            continue
+        words = line.strip().split() + ['<eos>']
+        chain.append(words)
+    if len(chain) >= chain_length:
+        dataset.append(make_array(chain))
+    return dataset, vocab
 
 
 def tokenize_text(file_path, vocab={}, update_vocab=False):

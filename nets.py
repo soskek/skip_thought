@@ -17,18 +17,31 @@ import chainer.functions as F
 import chainer.links as L
 from chainer import training
 from chainer.training import extensions
+from chainer import reporter
 
 from black_out import BlackOut
 from adaptive_softmax import AdaptiveSoftmaxOutputLayer
 
 
-def embed_seq_batch(embed, seq_batch, dropout=0.):
-    batchsize = len(seq_batch)
-    e_seq_batch = F.split_axis(
-        F.dropout(embed(F.concat(seq_batch, axis=0)), ratio=dropout),
-        batchsize, axis=0)
-    # [(len, ), ] x batchsize
-    return e_seq_batch
+def embed_seq_batch(embed, seq_batch, dropout=0., context=None):
+    x_len = [len(seq) for seq in seq_batch]
+    x_section = np.cumsum(x_len[:-1])
+    ex = embed(F.concat(seq_batch, axis=0))
+    ex = F.dropout(ex, dropout)
+    if context is not None:
+        # """
+        cx = F.concat(
+            [F.tile(context[i], (l, 1))
+             for i, l in enumerate(x_len)], axis=0)
+        ex = F.concat([ex, cx], axis=1)
+        """
+        cx = F.concat(
+            [F.tile(context[i], (l, 1))
+             for i, l in enumerate(x_len)], axis=0)
+        ex = ex + cx
+        """
+    exs = F.split_axis(ex, x_section, 0)
+    return exs
 
 
 class BlackOutOutputLayer(BlackOut):
@@ -90,7 +103,113 @@ class SharedOutputLayer(chainer.Chain):
     def output(self, h, t=None):
         return self(h)
 
-# Definition of a recurrent net for language modeling
+
+class SkipThoughtModel(chainer.Chain):
+    def __init__(self, n_vocab, n_units, n_layers=2, dropout=0.5,
+                 share_embedding=False, blackout_counts=None,
+                 adaptive_softmax=False):
+        super(SkipThoughtModel, self).__init__()
+        with self.init_scope():
+            self.embed = L.EmbedID(n_vocab, n_units)
+            self.encoder = L.NStepGRU(n_layers, n_units, n_units, dropout)
+            # TODO: shared decoder with preprojection
+            self.decoder_fw = L.NStepGRU(
+                n_layers, n_units * 2, n_units, dropout)
+            self.decoder_bw = L.NStepGRU(
+                n_layers, n_units * 2, n_units, dropout)
+
+            assert(not (share_embedding and blackout_counts is not None))
+            if share_embedding:
+                self.output = SharedOutputLayer(self.embed.W)
+            elif blackout_counts is not None:
+                sample_size = max(500, (n_vocab // 200))
+                self.output = BlackOutOutputLayer(
+                    n_units, blackout_counts, sample_size)
+                print('Blackout sample size is {}'.format(sample_size))
+            elif adaptive_softmax:
+                self.output = AdaptiveSoftmaxOutputLayer(
+                    n_units, n_vocab,
+                    cutoff=[2000, 10000], reduce_k=4)
+            else:
+                self.output = NormalOutputLayer(n_units, n_vocab)
+        self.dropout = dropout
+        self.n_units = n_units
+        self.n_layers = n_layers
+
+        #"""
+        for name, param in self.namedparams():
+            if param.ndim != 1:
+                # This initialization is applied only for weight matrices
+                param.data[...] = np.random.uniform(
+                    -0.1, 0.1, param.data.shape)
+        #"""
+
+        self.loss = 0.
+
+    def __call__(self, x):
+        raise NotImplementedError()
+
+    def calculate_loss(self, input_chain):
+        # TODO: variable length of input_chain
+        loss = 0.
+
+        def proc(seq_batch_1, seq_batch_2, encoder, decoder):
+            e_seq_batch_1 = self.embed_seq_batch(seq_batch_1)
+            s_hs_1 = self.encode_seq_batch(
+                e_seq_batch_1, encoder)[0]  # take h at last step
+            s_hs_1 = s_hs_1[-1]  # take final layer h
+            seq_batch_2_wo_bos = [seq[1:] for seq in seq_batch_2]
+            seq_batch_2_wo_eos = [seq[:-1] for seq in seq_batch_2]
+            e_seq_batch_2 = self.embed_seq_batch(
+                seq_batch_2_wo_eos, context=s_hs_1)
+            t_out_batch_2 = self.encode_seq_batch(
+                e_seq_batch_2, decoder)[-1]  # take final h at each step
+            n_tok = sum(len(s) for s in seq_batch_2_wo_bos)
+            return self.output_and_loss_from_seq_batch(
+                t_out_batch_2, seq_batch_2_wo_bos,
+                normalize=n_tok)
+
+        loss_fw = proc(input_chain[0], input_chain[1],
+                       self.encoder, self.decoder_fw)
+        loss_bw = proc(input_chain[1], input_chain[0],
+                       self.encoder, self.decoder_bw)
+        loss = (loss_fw + loss_bw) / 2.  # Note this is macro average
+        reporter.report({'FWperp': self.xp.exp(loss_fw.data)}, self)
+        reporter.report({'BWperp': self.xp.exp(loss_bw.data)}, self)
+        reporter.report({'perp': self.xp.exp(loss.data)}, self)
+        return loss
+
+    def embed_seq_batch(self, x_seq_batch, context=None):
+        e_seq_batch = embed_seq_batch(
+            self.embed, x_seq_batch,
+            dropout=self.dropout,
+            context=context)
+        return e_seq_batch
+
+    def encode_seq_batch(self, e_seq_batch, encoder):
+        if isinstance(encoder, L.NStepLSTM):
+            hs, cs, y_seq_batch = encoder(None, None, e_seq_batch)
+            return hs, cs, y_seq_batch
+        else:
+            hs, y_seq_batch = encoder(None, e_seq_batch)
+            return hs, y_seq_batch
+
+    def output_and_loss_from_seq_batch(self, y_seq_batch, t_seq_batch, normalize=None):
+        y = F.concat(y_seq_batch, axis=0)
+        y = F.dropout(y, ratio=self.dropout)
+        t = F.concat(t_seq_batch, axis=0)
+        loss = self.output.output_and_loss(y, t)
+        if normalize is not None:
+            loss *= 1. * t.shape[0] / normalize
+        else:
+            loss *= t.shape[0]
+        return loss
+
+    def pop_loss(self):
+        # This is for auxiliary loss
+        loss = self.loss
+        self.loss = 0.
+        return loss
 
 
 class RNNForLM(chainer.Chain):

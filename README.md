@@ -1,3 +1,20 @@
+# Skip-thought Vector
+
+## Prepare
+
+`PYTHONIOENCODING=utf-8 python preprocess_spacy.py datasets/wikitext-103-raw/wiki.train.raw > train`
+
+`PYTHONIOENCODING=utf-8 python preprocess_after_spacy.py train > after.train`
+
+`python construct_vocab.py --data after.train -t 30 -s after.vocab.t30.json`
+
+`python -u train.py -g 3 --train datasets/wikitext-103-raw/after.train --valid datasets/wikitext-103-raw/after.valid --vocab datasets/wikitext-103-raw/after.vocab.t100.json -u 512 --layer 1 --dropout 0.1`
+
+
+For 128 sentence pairs in a minibatch, 512-unit GRU with vocabulary size of 22231 can process 2.4 iterations per second on 7.5GB GPU memory.
+On dataset with 4,000,000 pairs, training is performed over 5 epoch in 18 hours.
+
+
 # Efficient Softmax Approximation
 
 Implementations of Blackout and Adaptive Softmax for efficiently calculating word distribution for language modeling of very large vocabularies.
