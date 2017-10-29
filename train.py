@@ -53,6 +53,8 @@ def main():
     parser.add_argument('--resume-wordemb-vocab')
     parser.add_argument('--init-output-by-embed', action='store_true')
 
+    parser.add_argument('--language-model', action='store_true')
+
     args = parser.parse_args()
     print(json.dumps(args.__dict__, indent=2))
 
@@ -61,10 +63,16 @@ def main():
     print('vocab is loaded', args.vocab)
     print('vocab =', n_vocab)
 
-    train = chain_utils.SequenceChainDataset(
-        args.train_path, vocab, chain_length=2)
-    valid = chain_utils.SequenceChainDataset(
-        args.valid_path, vocab, chain_length=2)
+    if args.language_model:
+        train = chain_utils.SequenceChainDataset(
+            args.train_path, vocab, chain_length=1)
+        valid = chain_utils.SequenceChainDataset(
+            args.valid_path, vocab, chain_length=1)
+    else:
+        train = chain_utils.SequenceChainDataset(
+            args.train_path, vocab, chain_length=2)
+        valid = chain_utils.SequenceChainDataset(
+            args.valid_path, vocab, chain_length=2)
 
     print('#train =', len(train))
     print('#valid =', len(valid))
@@ -81,10 +89,19 @@ def main():
         assert(len(counts) == n_vocab)
     else:
         counts = None
-    model = nets.SkipThoughtModel(n_vocab, args.unit, args.layer, args.dropout,
-                                  share_embedding=args.share_embedding,
-                                  blackout_counts=counts,
-                                  adaptive_softmax=args.adaptive_softmax)
+
+    if args.language_model:
+        model = nets.SentenceLanguageModel(
+            n_vocab, args.unit, args.layer, args.dropout,
+            share_embedding=args.share_embedding,
+            blackout_counts=counts,
+            adaptive_softmax=args.adaptive_softmax)
+    else:
+        model = nets.SkipThoughtModel(
+            n_vocab, args.unit, args.layer, args.dropout,
+            share_embedding=args.share_embedding,
+            blackout_counts=counts,
+            adaptive_softmax=args.adaptive_softmax)
 
     if args.gpu >= 0:
         chainer.cuda.get_device_from_id(args.gpu).use()
@@ -131,17 +148,21 @@ def main():
 
     trainer.extend(extensions.LogReport(trigger=log_trigger),
                    trigger=log_trigger)
-    keys = [
-        'epoch', 'iteration',
-        'main/perp',
-        'main/FWperp',
-        'main/BWperp',
-        'validation/main/perp',
-        #        'val/bleu',
-        #        'val/rouge',
-        #        'val/cider',
-        #        'val/meteor',
-        'elapsed_time']
+
+    if args.language_model:
+        keys = [
+            'epoch', 'iteration',
+            'main/perp',
+            'validation/main/perp',
+            'elapsed_time']
+    else:
+        keys = [
+            'epoch', 'iteration',
+            'main/perp',
+            'main/FWperp',
+            'main/BWperp',
+            'validation/main/perp',
+            'elapsed_time']
     trainer.extend(extensions.PrintReport(keys),
                    trigger=log_trigger)
     trainer.extend(extensions.ProgressBar(update_interval=50))

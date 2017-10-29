@@ -210,6 +210,45 @@ class SkipThoughtModel(chainer.Chain):
         return loss
 
 
+class SentenceLanguageModel(SkipThoughtModel):
+    def __init__(self, n_vocab, n_units, n_layers=2, dropout=0.5,
+                 share_embedding=False, blackout_counts=None,
+                 adaptive_softmax=False):
+        super(SentenceLanguageModel, self).__init__(
+            n_vocab, n_units, n_layers, dropout,
+            share_embedding,
+            blackout_counts,
+            adaptive_softmax)
+        delattr(self, 'encoder')
+        delattr(self, 'decoder_fw')
+        delattr(self, 'decoder_bw')
+
+        with self.init_scope():
+            self.rnn = L.NStepLSTM(n_layers, n_units, n_units, dropout)
+
+        for name, param in self.namedparams():
+            if param.ndim != 1:
+                # This initialization is applied only for weight matrices
+                param.data[...] = np.random.uniform(
+                    -0.1, 0.1, param.data.shape)
+
+    def calculate_loss(self, input_chain):
+        # TODO: variable length of input_chain
+
+        seq_batch = input_chain[0]
+        seq_batch_wo_bos = [seq[1:] for seq in seq_batch]
+        seq_batch_wo_eos = [seq[:-1] for seq in seq_batch]
+        e_seq_batch = self.embed_seq_batch(seq_batch_wo_eos)
+        t_out_batch = self.encode_seq_batch(
+            e_seq_batch, self.rnn)[-1]  # take final h at each step
+        n_tok = sum(len(s) for s in seq_batch_wo_bos)
+        loss = self.output_and_loss_from_seq_batch(
+            t_out_batch, seq_batch_wo_bos,
+            normalize=n_tok)
+        reporter.report({'perp': self.xp.exp(loss.data)}, self)
+        return loss
+
+
 class RNNForLM(chainer.Chain):
     # TODO: nstep LSTM
     def __init__(self, n_vocab, n_units, n_layers=2, dropout=0.5,
