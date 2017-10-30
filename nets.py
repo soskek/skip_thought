@@ -29,20 +29,11 @@ def embed_seq_batch(embed, seq_batch, dropout=0., context=None):
     ex = embed(F.concat(seq_batch, axis=0))
     ex = F.dropout(ex, dropout)
     if context is not None:
-        # TODO:
-        # ids = [xp.full(l, i).astype('i') for i, l in enumerate(x_len)]
-        # cx = F.embed_id(ids, context)
-        # """
-        cx = F.concat(
-            [F.tile(context[i], (l, 1))
-             for i, l in enumerate(x_len)], axis=0)
+        ids = [embed.xp.full((l, ), i).astype('i')
+               for i, l in enumerate(x_len)]
+        ids = embed.xp.concatenate(ids, axis=0)
+        cx = F.embed_id(ids, context)
         ex = F.concat([ex, cx], axis=1)
-        """
-        cx = F.concat(
-            [F.tile(context[i], (l, 1))
-             for i, l in enumerate(x_len)], axis=0)
-        ex = ex + cx
-        """
     exs = F.split_axis(ex, x_section, 0)
     return exs
 
