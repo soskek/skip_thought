@@ -29,6 +29,9 @@ def embed_seq_batch(embed, seq_batch, dropout=0., context=None):
     ex = embed(F.concat(seq_batch, axis=0))
     ex = F.dropout(ex, dropout)
     if context is not None:
+        # TODO:
+        # ids = [xp.full(l, i).astype('i') for i, l in enumerate(x_len)]
+        # cx = F.embed_id(ids, context)
         # """
         cx = F.concat(
             [F.tile(context[i], (l, 1))
@@ -106,16 +109,24 @@ class SharedOutputLayer(chainer.Chain):
 
 class SkipThoughtModel(chainer.Chain):
     def __init__(self, n_vocab, n_units, n_layers=2, dropout=0.5,
+                 rnn='gru',
                  share_embedding=False, blackout_counts=None,
                  adaptive_softmax=False):
         super(SkipThoughtModel, self).__init__()
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, n_units)
-            self.encoder = L.NStepGRU(n_layers, n_units, n_units, dropout)
+
+            if rnn == 'lstm':
+                RNN = L.NStepLSTM
+            elif rnn == 'gru':
+                RNN = L.NStepGRU
+            else:
+                NotImplementedError()
+            self.encoder = RNN(n_layers, n_units, n_units, dropout)
             # TODO: shared decoder with preprojection
-            self.decoder_fw = L.NStepGRU(
+            self.decoder_fw = RNN(
                 n_layers, n_units * 2, n_units, dropout)
-            self.decoder_bw = L.NStepGRU(
+            self.decoder_bw = RNN(
                 n_layers, n_units * 2, n_units, dropout)
 
             assert(not (share_embedding and blackout_counts is not None))
@@ -212,6 +223,7 @@ class SkipThoughtModel(chainer.Chain):
 
 class SentenceLanguageModel(SkipThoughtModel):
     def __init__(self, n_vocab, n_units, n_layers=2, dropout=0.5,
+                 rnn='lstm',
                  share_embedding=False, blackout_counts=None,
                  adaptive_softmax=False):
         super(SentenceLanguageModel, self).__init__(
@@ -224,7 +236,13 @@ class SentenceLanguageModel(SkipThoughtModel):
         delattr(self, 'decoder_bw')
 
         with self.init_scope():
-            self.rnn = L.NStepLSTM(n_layers, n_units, n_units, dropout)
+            if rnn == 'lstm':
+                RNN = L.NStepLSTM
+            elif rnn == 'gru':
+                RNN = L.NStepGRU
+            else:
+                NotImplementedError()
+            self.rnn = RNN(n_layers, n_units, n_units, dropout)
 
         for name, param in self.namedparams():
             if param.ndim != 1:

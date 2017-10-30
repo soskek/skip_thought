@@ -54,6 +54,7 @@ def main():
     parser.add_argument('--init-output-by-embed', action='store_true')
 
     parser.add_argument('--language-model', action='store_true')
+    parser.add_argument('--rnn', default='gru', choices=['lstm', 'gru'])
 
     args = parser.parse_args()
     print(json.dumps(args.__dict__, indent=2))
@@ -93,15 +94,18 @@ def main():
     if args.language_model:
         model = nets.SentenceLanguageModel(
             n_vocab, args.unit, args.layer, args.dropout,
+            rnn=args.rnn,
             share_embedding=args.share_embedding,
             blackout_counts=counts,
             adaptive_softmax=args.adaptive_softmax)
     else:
         model = nets.SkipThoughtModel(
             n_vocab, args.unit, args.layer, args.dropout,
+            rnn=args.rnn,
             share_embedding=args.share_embedding,
             blackout_counts=counts,
             adaptive_softmax=args.adaptive_softmax)
+    print('RNN unit is {}'.format(args.rnn))
 
     if args.gpu >= 0:
         chainer.cuda.get_device_from_id(args.gpu).use()
