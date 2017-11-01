@@ -19,6 +19,9 @@ python construct_vocab.py --data train_data -t 100 --save vocab.t100
 ```
 
 
+For skip-thought vector, see [Skip-Thought Vectors](https://arxiv.org/pdf/1506.06726.pdf), Ryan Kiros, Yukun Zhu, Ruslan Salakhutdinov, Richard S. Zemel, Antonio Torralba, Raquel Urtasun, Sanja Fidler, NIPS 2015.
+
+
 ### Computation Cost
 
 #### Sentence-level Language Model
