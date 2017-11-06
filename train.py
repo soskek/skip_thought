@@ -121,7 +121,7 @@ def main():
 
     iter_per_epoch = len(train) // args.batchsize
     log_trigger = (iter_per_epoch // 100, 'iteration')
-    eval_trigger = (log_trigger[0] * 100, 'iteration')  # every 1 epoch
+    eval_trigger = (log_trigger[0] * 50, 'iteration')  # every half epoch
 
     updater = training.StandardUpdater(
         train_iter, optimizer,

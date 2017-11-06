@@ -2,6 +2,8 @@ from __future__ import print_function
 import io
 import sys
 
+unify_ner = True
+
 for i_line, l in enumerate(io.open(sys.argv[1], encoding='utf8')):
     if i_line % 100000 == 0:
         sys.stderr.write('{} lines end\n'.format(i_line))
@@ -16,11 +18,16 @@ for i_line, l in enumerate(io.open(sys.argv[1], encoding='utf8')):
             tok = tok.split('@@@')[0] + '@'
         if '@@' in tok:
             sp = tok.split('@@')
-            if sp[-1]:
-                tok = sp[-1]
-                if len(sp[0]):
-                    raw_tail_char = sp[0][-1]
-                    tok = raw_tail_char + '@@' + tok
+            if not unify_ner:
+                if sp[-1]:
+                    tok = sp[-1]
+                    if len(sp[0]):
+                        raw_tail_char = sp[0][-1]
+                        tok = raw_tail_char + '@@' + tok
+            else:
+                if sp[-1]:
+                    tok = sp[-1]
+                    tok = '@@' + tok
         out.append(tok)
     out = ' '.join(out)
 
