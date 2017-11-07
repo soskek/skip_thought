@@ -219,6 +219,7 @@ class SentenceLanguageModel(SkipThoughtModel):
                  adaptive_softmax=False):
         super(SentenceLanguageModel, self).__init__(
             n_vocab, n_units, n_layers, dropout,
+            rnn,
             share_embedding,
             blackout_counts,
             adaptive_softmax)
@@ -261,12 +262,19 @@ class SentenceLanguageModel(SkipThoughtModel):
 class RNNForLM(chainer.Chain):
     # TODO: nstep LSTM
     def __init__(self, n_vocab, n_units, n_layers=2, dropout=0.5,
+                 rnn='gru',
                  share_embedding=False, blackout_counts=None,
                  adaptive_softmax=False):
         super(RNNForLM, self).__init__()
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, n_units)
-            self.rnn = L.NStepLSTM(n_layers, n_units, n_units, dropout)
+            if rnn == 'lstm':
+                RNN = L.NStepLSTM
+            elif rnn == 'gru':
+                RNN = L.NStepGRU
+            else:
+                NotImplementedError()
+            self.rnn = RNN(n_layers, n_units, n_units, dropout)
             assert(not (share_embedding and blackout_counts is not None))
             if share_embedding:
                 self.output = SharedOutputLayer(self.embed.W)
