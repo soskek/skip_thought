@@ -143,7 +143,7 @@ def main():
         print_sentence_mod=args.print_sentence_mod),
         trigger=eval_trigger)
     """
-    record_trigger = training.triggers.MaxValueTrigger(
+    record_trigger = training.triggers.MinValueTrigger(
         'validation/main/perp',
         trigger=eval_trigger)
     trainer.extend(extensions.snapshot_object(
